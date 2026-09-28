@@ -6,10 +6,8 @@ import uuid
 import jwt
 from pydantic import BaseModel
 
-from shortlink_api.config import get_settings
+from shortlink_api.config import settings
 
-
-settings = get_settings()
 
 ALG = settings.JWT_ALGORITHM
 ACCESS_TOKEN_TTL = timedelta(minutes=settings.ACCESS_TOKEN_TTL)

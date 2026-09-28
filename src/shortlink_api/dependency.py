@@ -3,11 +3,10 @@ from typing import Annotated
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 
-from shortlink_api.config import get_settings
+from shortlink_api.config import settings
 from shortlink_api.core.security.jwt import TokenClaims, TokenType, verify_token
 
 
-settings = get_settings()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
