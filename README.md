@@ -31,7 +31,7 @@ Redis is used as a cache in front of Postgres for the redirect path, keyed as:
 | `shorturl:{code}:clicks`      | click counter buffer                 |
 | `longurl:{user_id}:{hashed}`  | per-user dedup lookup                |
 | `ratelimit:{ip}:{route}`      | anonymous rate limiting              |
-| `ratelimit:{user_id}:{route}` | authenticated rate limiting          |
+| `ratelimit:user:{user_id}:{route}` | authenticated rate limiting          |
 
 **Short codes carry a 24h TTL in Redis.** This is a cache expiry only — it does **not** mean the short link stops working. On a cache miss, the redirect falls through to Postgres, resolves normally, and repopulates the cache. Short links resolve indefinitely at the application level; only the cache entry expires.
 
