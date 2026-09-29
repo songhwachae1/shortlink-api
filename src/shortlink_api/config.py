@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import URL
 
 _ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
@@ -33,10 +34,14 @@ class Settings(BaseSettings):
     )
 
     @property
-    def DB_URL(self) -> str:
-        return(
-            f"postgresql+asyncpg://{self.DB_USER}:{self.DB_PASSWORD}"
-            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+    def DB_URL(self) -> URL:
+        return URL.create(
+            "postgresql+asyncpg",
+            username=self.DB_USER,
+            password=self.DB_PASSWORD,
+            host=self.DB_HOST,
+            port=int(self.DB_PORT),
+            database=self.DB_NAME,
         )
 
 

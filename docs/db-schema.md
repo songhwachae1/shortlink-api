@@ -1,4 +1,4 @@
-# Database Schema — shortlink-api
+# Database Schema — shortlink
 
 ## `users`
 
@@ -10,7 +10,7 @@
 | `first_name`    | `varchar(100)` | `NOT NULL`               |                                              |
 | `last_name`     | `varchar(100)` | `NOT NULL`               |                                              |
 | `created_at`    | `timestamptz`  | `NOT NULL DEFAULT now()` |                                              |
-| `updated_at`    | `timestamptz`  | `NOT NULL DEFAULT now()` | update via trigger or app-level on write     |
+| `updated_at`    | `timestamptz`  | `NOT NULL DEFAULT now()` | maintained by `set_updated_at()` trigger     |
 
 ```sql
 CREATE TABLE users (
@@ -33,7 +33,7 @@ CREATE TABLE users (
 | `id`              | `bigserial`   | `PRIMARY KEY`              | source sequence for code generation                                                      |
 | `code`            | `varchar(16)` | `NOT NULL`, `UNIQUE`     | base62-encoded, derived from`id`. Required by every redirect, cache, and claim lookup. |
 | `long_url`        | `text`        | `NOT NULL`                 | `text`, not `varchar` — URLs can exceed typical varchar limits                      |
-| `user_id`         | `bigint`      | `NULL`, `FK → users.id` | nullable — anonymous creation has no owner; set on claim                                |
+| `user_id`         | `bigint`      | `NULL`, `FK → users.id ON DELETE SET NULL` | nullable — anonymous creation has no owner; set on claim                                |
 | `is_active`       | `boolean`     | `NOT NULL DEFAULT true`    | drives partial index for fast redirect lookups; flipped to`false` on soft delete       |
 | `deactivated_at`  | `timestamptz` | `NULL`                     | set when soft-deleted; cleared on reactivation/claim                                     |
 | `click_count`     | `integer`     | `NOT NULL DEFAULT 0`       | lifetime total, never resets; incremented by fire-and-forget click tracker               |
@@ -46,7 +46,7 @@ CREATE TABLE links (
     id               BIGSERIAL PRIMARY KEY,
     code             VARCHAR(16) NOT NULL UNIQUE,
     long_url         TEXT NOT NULL,
-    user_id          BIGINT NULL REFERENCES users(id),
+    user_id          BIGINT NULL REFERENCES users(id) ON DELETE SET NULL,
     is_active        BOOLEAN NOT NULL DEFAULT true,
     deactivated_at   TIMESTAMPTZ NULL,
     click_count      INTEGER NOT NULL DEFAULT 0,
@@ -63,15 +63,19 @@ CREATE TABLE links (
 -- independent of is_active — a code is never reissued, active or not.
 
 -- Per-user link listing (dashboard, "my links")
-CREATE INDEX idx_links_user_id
+CREATE INDEX ix_links_user_id
     ON links (user_id)
     WHERE user_id IS NOT NULL;
 
 -- Purge job scan
-CREATE INDEX idx_links_purge_candidates
+CREATE INDEX ix_links_purge_candidates
     ON links (last_clicked_at, created_at)
     WHERE is_active = true;
 ```
+
+### Triggers
+
+`users` and `links` each have a `BEFORE UPDATE ... FOR EACH ROW` trigger (`trg_<table>_set_updated_at`) that calls the shared `set_updated_at()` function to refresh `updated_at`. Created in the migrations (autogenerate does not detect them). The `citext` extension is also created by the users migration.
 
 ### Purge query (cold-link check)
 

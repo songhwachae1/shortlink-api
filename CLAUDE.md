@@ -9,7 +9,7 @@ This is an early-stage scaffold, not the full system described in README.md. Tre
 - `src/shortlink_api/main.py` and `src/shortlink_api/__init__.py` are **empty** — no FastAPI `app` instance exists yet, and the `shortlink-api` console script (`pyproject.toml` → `shortlink_api:main`) has no entry point to call.
 - `src/shortlink_api/api/auth.py` is **empty** — no endpoints are wired up yet. `dependency.py`'s `get_current_user` assumes a route at `auth/login` (via `OAuth2PasswordBearer(tokenUrl="auth/login")`) that doesn't exist yet.
 - Only `core/security` (JWT issuance/verification, bcrypt password hashing) and `config.py` (Pydantic settings) are implemented.
-- Dependencies installed so far: `fastapi[standard]`, `bcrypt`, `pyjwt`. Postgres, Redis, SQLAlchemy, Alembic, and Docker — all described in the README as part of the design — are **not yet added** to `pyproject.toml`/`uv.lock`. `docs/db-schema.md` documents the intended schema, but there is no migration tooling or DB connection code yet.
+- Dependencies installed so far: `fastapi[standard]`, `bcrypt`, `pyjwt`, `sqlalchemy[asyncio]`, `asyncpg`, `alembic`. Postgres runs via `docker-compose.yml`. Redis is **not yet added**. The `users`/`links` models and baseline migrations (0001, 0002) exist; no repositories/services use them yet.
 - No test suite, linter, or type checker is configured yet (no pytest/ruff/mypy in the lockfile, nothing under `[tool.*]` in `pyproject.toml`).
 
 Don't assume infrastructure exists just because the README or db-schema doc describes it — check the actual code/deps first.
@@ -22,6 +22,9 @@ Dependency management is via `uv` (`uv.lock` present, `pyproject.toml` uses `uv_
 uv sync              # install dependencies into .venv
 uv run <script>       # run a script inside the project's venv
 uv add <package>       # add a new dependency
+uv run alembic upgrade head                            # apply migrations
+uv run alembic revision --autogenerate -m "msg"       # new migration from models
+uv run alembic check                                   # detect model/DB drift
 ```
 
 There are no build, lint, or test commands yet — none are configured in `pyproject.toml`. When adding the first tests, add the corresponding tool (e.g. pytest) as a dependency and record the run command here.
@@ -34,6 +37,9 @@ There are no build, lint, or test commands yet — none are configured in `pypro
   - `jwt.py` — ES256 JWT issuance/verification. `issue_token_pair()` produces an access+refresh pair in one call, both signed with the same private key, differentiated by a `type` claim (`TokenType.ACCESS`/`REFRESH`). `verify_token()` requires an `expected_type` and raises `InvalidTokenTypeError` if the token's `type` claim doesn't match — callers must not use one endpoint's verification for the other token type. Claims are validated into a `TokenClaims` pydantic model (`sub`, `iat`, `exp`, `jti`, `role`).
   - `password_hasher.py` — `PasswordHasher` ABC (`hash`, `matches`), decoupling the hashing algorithm from callers.
   - `bcrypt_password_hasher.py` — the bcrypt implementation. Passwords are SHA-256-prehashed (then base64-encoded) before being passed to bcrypt, to sidestep bcrypt's 72-byte input truncation. `matches()` swallows `ValueError`/`TypeError` from malformed input and returns `False` rather than raising.
+- **`db/`**: `base.py` holds the declarative `Base` and the constraint/index naming convention (don't change it retroactively); `session.py` holds the async engine, `SessionLocal` and `get_db`. `config.py`'s `DB_URL` is a `sqlalchemy.engine.URL` (password-safe).
+- **`models/`**: 2.0-style `User` and `Link` models. New models must be imported in `models/__init__.py` so Alembic autogenerate sees them.
+- **`alembic/`**: async `env.py`; the URL comes from `config.py`, never `alembic.ini`. Autogenerate does not detect the `citext` extension or the `set_updated_at()` triggers — add those by hand in migrations (see 0001/0002). FK `links.user_id` is `ON DELETE SET NULL`.
 - **`dependency.py`**: FastAPI dependency wiring, currently just `get_current_user`, which extracts a bearer token via `OAuth2PasswordBearer` and verifies it as an `ACCESS` token.
 - **`api/`**: intended home for route modules (e.g. `auth.py`); not yet implemented.
 
